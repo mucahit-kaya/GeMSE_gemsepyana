@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from adjustText import adjust_text
 import sys
 import getopt
 import os
@@ -70,7 +71,7 @@ def main(argv=sys.argv):
   except:
     print ("")
     print (f"ERROR. Regex can't match a duration in filename? fn={os.path.basename(al.fn)}, _times={_times}")
-    print (f"       Will set duration to t=1s for now. Rates won't make sense!!! Need to check!"
+    print (f"       Will set duration to t=1s for now. Rates won't make sense!!! Need to check!")
     print ("")
     al.t_live=1
   al.sample_name += f" ({al.t_live/(3600*24):.1f} days)"
@@ -101,12 +102,19 @@ def main(argv=sys.argv):
   ax.plot(bg.x, bg.y_per_keV_per_day, '-', c='r', lw=1, label=bg.sample_name)
 
   print (f"Drawing lines with isotopes={isotope} and minBR={BR}")
-  al.draw_special_lines(sdict = al.manual_dict, ## put cuts on manual dict, to select important lines
+  _textLabels = al.draw_special_lines(sdict = al.manual_dict, ## put cuts on manual dict, to select important lines
                         col = 'k',
                         xrange=xrange, 
                         minBR = BR,
                         isotope=isotope,
+                        adjustTextLabels=True,
                        ) 
+
+  if not _textLabels is None:
+    #print (f"{_textLabels=}")
+    adjust_text( _textLabels )
+
+
 
   ax.set_ylabel(r'Counts [keV$^{-1}$ day$^{-1}$]')
   ax.set_xlabel('Energy [keV]')
@@ -147,12 +155,14 @@ def main(argv=sys.argv):
 
       #al.draw_lines(add_labels=True, xrange=xrange)
       #al.draw_special_lines(add_labels=True, xrange=xrange, col='m')
-      al.draw_special_lines(sdict = al.manual_dict, ## put cuts on manual dict, to select important lines
+      _textLabels = al.draw_special_lines(sdict = al.manual_dict, ## put cuts on manual dict, to select important lines
                         col = 'k',
                         xrange=xrange, 
                         minBR = BR,
                         isotope=isotope,
+                        adjustTextLabels=True,
                        )
+
       if not xrange is None:
         plt.gca().set_xlim(*xrange)
         plt.gca().set_yscale('log')
@@ -167,9 +177,13 @@ def main(argv=sys.argv):
             ncol=2)
 
 
-        plt.tight_layout()
-        pdf.savefig()  # saves the current figure into a pdf page
-        plt.close()
+      if not _textLabels is None:
+        #print (f"{_textLabels=}")
+        adjust_text( _textLabels )
+
+      plt.tight_layout()
+      pdf.savefig()  # saves the current figure into a pdf page
+      plt.close()
 ##########################################################
 
 

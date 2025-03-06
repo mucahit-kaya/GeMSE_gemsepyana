@@ -2,6 +2,7 @@ import os.path
 
 import uproot
 import numpy as np
+from adjustText import adjust_text
 import matplotlib.pyplot as plt
 from os import path
 
@@ -295,6 +296,8 @@ class GeMSEData_bat():
                          (39.858, 1.091), (1078.62, 0.564), (893.408, 0.378), (452.83, 0.31), (288.07, 0.31), (1512.7, 0.29),
                          ],
                'Al26'  : [(1808.72, 1.0),],
+               'Na22'  : [(1274.537, 99.940),],
+               'Sc46'  : [(889.277, 99.9840), (1120.545, 99.9870)],
                'Tl208' : [(510.77, 22.0),
                           (583.191, 83.2),
                           (860.564, 12.5),
@@ -765,7 +768,7 @@ class GeMSEData_bat():
 
 
                             
-    def draw_special_lines(self, sdict=None, add_labels=True, minBR=None, isotope=None, xrange=None, col='b', ax=None, angle=90, fontsize=8): # Isotopes from the manually added list
+    def draw_special_lines(self, sdict=None, add_labels=True, minBR=None, isotope=None, xrange=None, col='b', ax=None, angle=90, fontsize=8, adjustTextLabels=False): # Isotopes from the manually added list
         if ax is None:
             cax = plt.gca()
         else:
@@ -780,6 +783,8 @@ class GeMSEData_bat():
         
         if sdict is None:
             sdict = self.manual_dict
+
+        _texts=[]
 
         #if minBR is None:
         #    minBR=0
@@ -822,9 +827,11 @@ class GeMSEData_bat():
                         _old_pos = _pos
                         _pos = _t_pos
                         _pos = 0.01 #0.99
-                        cax.text(enrg, _pos, 
+                        #print (f"{iso} ({enrg:.1f}keV, {BR:.2f}%)")
+                        _texts.append(
+                            cax.text(enrg, _pos, 
                                  #f'{iso} (BR {BR})', 
-                                 f'{iso} ({BR:.2f}%)', 
+                                     f'{iso} ({enrg:.1f}keV, {BR:.2f}%)', 
                                  horizontalalignment='left', 
                                  #verticalalignment='center', 
                                  verticalalignment='bottom',#'top', 
@@ -835,6 +842,23 @@ class GeMSEData_bat():
                                  fontsize=fontsize,
                                  rotation=angle,
                                  )
+                            )
+        if adjustTextLabels:
+              ##adjust_text(_texts)
+              ##print (f"adjusting labels...\n{len(_texts)=}...")
+              #text_x_pos = np.array([_tt.get_position()[0] for _tt in _texts])
+              #text_y_pos = np.array([_tt.get_position()[1] for _tt in _texts])
+              #adjust_text(
+              #  _texts, 
+              #  ax=cax,
+              #  x=text_x_pos,
+              #  y=text_y_pos,
+              #  #only_move={"text":"y"},  # Only repel from other text
+              #  expand_text=(1.2, 1.2),  # Small expansion factor to reduce overlap
+              #  force_static=(0,0),
+              #  #arrowprops=dict(arrowstyle='->', color='red'),
+              #)
+          return _texts
 
 
     def _get_nsig_intervals(self, mean, sigma, nlevels=3, x=None, y=None):
