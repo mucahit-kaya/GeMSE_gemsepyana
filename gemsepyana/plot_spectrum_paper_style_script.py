@@ -74,7 +74,18 @@ def main(argv=sys.argv):
     print (f"       Will set duration to t=1s for now. Rates won't make sense!!! Need to check!")
     print ("")
     al.t_live=1
-  al.sample_name += f" ({al.t_live/(3600*24):.1f} days)"
+
+  _nw = 25 
+  if len(al.sample_name)>_nw:
+    _short_name = al.sample_name.split("_combined")[0]
+    if len(_short_name)>_nw:
+      _short_name = _short_name[:_nw]
+    _short_name += "..."
+  else:
+    _short_name = al.sample_name
+
+  #al.sample_name += f" ({al.t_live/(3600*24):.1f} days)"
+  al.sample_name = f"{_short_name} ({al.t_live/(3600*24):.1f} days)"
 
   al.load_spectrum()
   al.rebin(nbins=10)

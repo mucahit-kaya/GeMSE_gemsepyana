@@ -767,8 +767,174 @@ class GeMSEData_bat():
                         self.draw_gauss_p0(A=_cts_fit, mu=enrg, sig=_Drf, binwidth=_bw, p0=_flat_bg_fit, color='m' )
 
 
+
+
+    def find_closest_index(self, energy):
+      sorted_array = self.x
+      idx = np.searchsorted(sorted_array, energy)
+      
+      # Handle edge cases
+      if idx == 0:
+          return 0
+      if idx == len(sorted_array):
+          return len(sorted_array) - 1
+
+      # Check the closest between the two candidates
+      left = sorted_array[idx - 1]
+      right = sorted_array[idx] if idx < len(sorted_array) else float('inf')
+      
+      return idx - 1 if abs(left - energy) <= abs(right - energy) else idx 
+
+    def get_local_max(self, energy, n_bins_local=5):
+      _idx = self.find_closest_index(energy=energy)
+      _e = self.x[_idx]
+      _val = np.max(self.y_per_keV_per_day[_idx-n_bins_local:_idx+n_bins_local])
+      return _e, _val
+
+
+    def prettify_iso(self, iso):
+      import re
+      match = re.match(r"([a-zA-Z]+)(\d+)", iso)
+      if match:
+        return match.groups()  # Return the letters and digits as a tuple
+      return None
+
+    #def annotate_lines(self, sdict=None, add_labels=True, minBR=None, isotope=None, xrange=None, col='b', ax=None, angle=90, fontsize=8, drawVLines=False, adjustTextLabels=False, pixel_offset = (0, 50), adjust_ylimit_for_text = True): 
+    def annotate_lines(self, sdict=None, add_labels=True, minBR=None, isotope=None, xrange=None, ax=None, angle=90, fontsize=8, drawVLines=False, adjustTextLabels=False, pixel_offset = (0, 50), adjust_ylimit_for_text = True, padding = 0.5): 
+        if ax is None:
+            cax = plt.gca()
+        else:
+            cax = ax
+        
+        if xrange is None:
+            xrange = self._xlim
+        else:
+            self._xlim = xrange
+        
+        if sdict is None:
+            sdict = self.manual_dict
+
+        #_texts=[]
+        annots = []
+
+        for iso, infos in sdict.items():
+            if isotope is not None:
+              ### in case the isotopes-list is empty, we draw all lines **larger than _minBR**
+              ### otherwise only the ones in the isotopes-list
+              if not iso in isotope:
+                continue
+              elif isinstance(minBR, list) or isinstance(minBR, tuple):
+                _minBR = minBR[ isotope.index(iso) ]
+              elif minBR is None:
+                _minBR=0
+              else:
+                ### we want to draw all lines larger than _minBR
+                _minBR = minBR
+            else:
+              if minBR is None:
+                _minBR=0
+              else:
+                _minBR=minBR
+            for _inf in infos: # (_inf) = (Peak Energy, Branching Ratio)
+                # print (_inf)
+                try:
+                    enrg, BR = _inf
+                except Exception as e:
+                    print (f'Exception: {e}\n_inf={_inf} (iso={iso})')
+                if BR < _minBR:
+                    continue
+
+                if xrange is None or (enrg > xrange[0] and enrg< xrange[1]):
+                    if drawVLines:
+                      cax.axvline(x=enrg, color=col, ls='--', lw=1)
+
+                    #trans = cax.get_xaxis_transform()
+                    ############# HERE THE NEW PART STARTS #######
+
+                    _eh, _yh = [],[]
+                    #annots = [] # define earlier!
+                    # Define offset in DISPLAY (pixel) units
+                    #pixel_offset = (0, 50)  # 0 pixels right, 50 pixels up
+
+                    if add_labels:
+                        _e,_val = self.get_local_max(energy=enrg)
+
+                        # Convert (x, y) data coordinates to display (pixel) coordinates
+                        display_x, display_y = cax.transData.transform((enrg, _val))
+                        
+                        # Apply offset in pixel units
+                        new_display_x = display_x + pixel_offset[0]
+                        new_display_y = display_y + pixel_offset[1]
+                        
+                        # Convert back to data coordinates
+                        new_x, new_y = cax.transData.inverted().transform((new_display_x, new_display_y))
+
+                        if BR > 10:
+                            _c = 'r'
+                            _fw="bold"
+                            _a=1
+                        elif BR > 3:
+                            _c = 'k'
+                            _fw="bold"
+                            _a=1
+                        elif BR >1:
+                            _c = 'k'
+                            _fw="normal"
+                            _a=1
+                        else:
+                            _c = 'k'
+                            _fw="normal"
+                            _a=0.3
+                       
+                        #_annotation_text =  f'{iso} ({enrg:.1f}keV, {BR:.2f}%)'
+                        _pretty_iso = self.prettify_iso(iso)
+                        _piso = iso
+                        if not _pretty_iso is None:
+                          _piso = f"$^{{{_pretty_iso[1]}}}${_pretty_iso[0]}"
+                        _annotation_text =  f'{_piso} ({enrg:.1f}keV, {BR:.2f}%)'
+                        _ann = cax.annotate(_annotation_text, 
+                                           xy=(enrg,_val), 
+                                           xytext=(new_x, new_y),
+                                           fontsize=fontsize, fontweight=_fw, color=_c, alpha=_a,
+                                           rotation=angle,
+                                           ha='center',
+                                           va='bottom',
+                                           arrowprops=dict(arrowstyle='->', color=_c, alpha=_a),
+                                          )
+                        annots.append(_ann)
+ 
+        if adjust_ylimit_for_text and annots:
+            plt.gcf().draw_without_rendering()
+            _tops=[]
+            for _ann in annots:
+                _wex=_ann.get_window_extent()
+                _right, _top = _wex.get_points()[1]
+                _tops.append(_top)
+            
+            # Adjust y-limits based on the text's position
+            y_min, y_max = cax.get_ylim()  # Get current y-limits
+            
+            #text_y_position = text.get_position()[1]  # Get the y-position of the text
+            text_y_position = np.amax(_tops)
+            
+            # Adjust y-limits if the text goes outside the current limits
+            # padding = 0.5  # Extra space for the text to fit inside
+            if text_y_position > y_max:
+                cax.set_ylim(y_min, text_y_position + padding)
+            elif text_y_position < y_min:
+                cax.set_ylim(text_y_position - padding, y_max)
+
+        if adjustTextLabels:
+          adjust_text( annots, ax=cax ) #, only_move={'text':'y+'} )  ## maybe interesting feature...
+
+        return annots
+
+
+
+
+
                             
-    def draw_special_lines(self, sdict=None, add_labels=True, minBR=None, isotope=None, xrange=None, col='b', ax=None, angle=90, fontsize=8, adjustTextLabels=False): # Isotopes from the manually added list
+    def draw_special_lines(self, sdict=None, add_labels=True, minBR=None, isotope=None, xrange=None, col='b', ax=None, angle=90, fontsize=8, drawVLines=True, adjustTextLabels=False): # Isotopes from the manually added list
         if ax is None:
             cax = plt.gca()
         else:
@@ -817,7 +983,8 @@ class GeMSEData_bat():
 
                 if xrange is None or (enrg > xrange[0] and enrg< xrange[1]):
                     #print (f'{key}: {enrg}')
-                    cax.axvline(x=enrg, color=col, ls='--', lw=1)
+                    if drawVLines:
+                      cax.axvline(x=enrg, color=col, ls='--', lw=1)
                     #cax.axvline(x=lfr, color=col, ls='--', lw=0.5)
                     #cax.axvline(x=ufr, color=col, ls='--', lw=0.5)
 

@@ -64,6 +64,49 @@ And e.g. display it::
 
     >>> fig.show()
 
+(Argueably) nicer plot::
+
+    >>> c_al = 'xkcd:poop green'
+    >>> c_bg = 'xkcd:royal blue'
+
+    >>> fig, ax = plt.subplots(figsize=(16,12))
+    >>> 
+    >>> xrange = (0,3000)
+    >>> #xrange = (500, 1000)
+    >>> 
+    >>> isotope = ("Pb214", "Bi214", "K40")
+    >>> 
+    >>> minBR = 3
+    >>> 
+    >>> ax.plot(al.x , al.y_per_keV_per_day , '-', c=c_al, lw=1, label=al.sample_name)
+    >>> ax.plot(bg.x, bg.y_per_keV_per_day, '-', c=c_bg, lw=1, label=bg.sample_name)
+    >>> 
+    >>> ax.set_ylabel(r'Counts [keV$^{-1}$ day$^{-1}$]')
+    >>> ax.set_xlabel('Energy [keV]')
+    >>> ax.set_yscale('log')
+    >>> ax.set_xlim(*xrange)
+    >>> 
+    >>> ax.legend(bbox_to_anchor=(0, 1.02, 1, 0.2),
+    >>>           loc="lower left",
+    >>>           mode="expand",
+    >>>           borderaxespad=0,
+    >>>           frameon=False,
+    >>>           ncol=2)
+    >>> 
+    >>> if True:
+    >>>     annots = al.annotate_lines(
+    >>>         sdict = al.manual_dict, 
+    >>>         xrange=xrange,
+    >>>         minBR = minBR,
+    >>>         isotope=isotope,
+    >>>         fontsize=10,
+    >>>         adjustTextLabels=False, # if True, uses adjustText library to move text labels around
+    >>>         #drawVLines=False,
+    >>>     )
+    >>> 
+    >>> #ax.set_ylim(1e-2, 1e3) # e.g. (None, 1e3) for default lower limit
+    >>> fig.show()
+
 A simple rate analyis could look like::
 
    >>> al.load_bat_params(fn="[path_to_GeMSE_analysis_type]/parameters_activity_calculation.txt")

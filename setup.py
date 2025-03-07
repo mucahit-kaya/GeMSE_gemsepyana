@@ -24,6 +24,7 @@ setup(name='gemsepyana',
       'annotate_histogram=gemsepyana.annotate_calibrated_histogram_uproot:main',
       'annotate_using_bat_inputs=gemsepyana.annotate_using_bat_inputs:main',
       'plot_spectrum_paper_style=gemsepyana.plot_spectrum_paper_style_script:main',
+      'plot_spectrum_paper_style2=gemsepyana.plot_spectrum_paper_style_script2:main',
       ],
     },
   zip_safe=False)
