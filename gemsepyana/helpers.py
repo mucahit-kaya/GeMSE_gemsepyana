@@ -3,6 +3,8 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from uncertainties import ufloat
 
 def count_line(gemsedata, thr_low, thr_high):
     _Xr = ((gemsedata.x>thr_low) & (gemsedata.x<thr_high))
@@ -34,12 +36,26 @@ def cts_bgcorr(gd, thr):
     return (nsig_corr, nsig_corr_e, nsig, nbgl, nbgh)
     #return (nsig_corr, nsig_corr_e)
 
-def compute_activity_per_line(gd, thr, eff, mass=1):
+def compute_activity_per_line(gd, thr, eff, mass=1, bg=None):
     _cts, _cts_e, nsig, nbgl, nbgh = cts_bgcorr(gd=gd, thr=thr)
     _t = gd.t_live
     _a = _cts/_t/eff[0]/mass
-    _a_e = np.sqrt( (_a * np.sqrt((_cts_e/_cts)**2 + (eff[1]/eff[0])**2))**2)
-    return np.array([_a, _a_e, nsig, nbgl, nbgh])
+    _a_e = np.sqrt( (_a * np.sqrt((_cts_e/_cts)**2 + (eff[1]/eff[0])**2))**2 ) # outer np.sqrt( ()**2) to avoid negative uncertainties
+
+    if bg:
+      _cts_bg, _cts_e_bg, nsig_bg, nbgl_bg, nbgh_bg = cts_bgcorr(gd=bg, thr=thr)
+      _t_bg = bg.t_live
+      _a_bg = _cts_bg/_t_bg
+      _a_e_bg = np.sqrt( ( _a_bg * _cts_e_bg/_cts_bg )**2 )
+
+      a = (_a*mass - _a_bg)/mass
+      a_e = np.sqrt( (_a_e)**2 + (_a_e_bg)**2 )
+      #return np.array(a, a_e, _a_bg, _a_e_bg)
+      return {"signal": np.array([_a, _a_e, nsig, nbgl, nbgh, _cts, _cts_e]), "signal_corr": np.array([a, a_e]), "background": np.array([_a_bg, _a_e_bg, nsig_bg, nbgl_bg, nbgh_bg, _cts_bg, _cts_e_bg])}
+    else:
+      #return np.array([_a, _a_e, nsig, nbgl, nbgh])
+      #return np.array([_a, _a_e, _cts, _cts_e, nsig, nbgl, nbgh]), None
+      return {"signal": np.array([_a, _a_e, nsig, nbgl, nbgh, _cts, _cts_e]), "background": None, "signal_corr": None}
 
 
 
@@ -62,7 +78,7 @@ def convert_isotope_name(isotope):
 
 
 
-def simple_activities(gd, plot=False, _xw=3, isotopes=None, yscale='log'):
+def simple_activities(gd, plot=False, _xw=3, isotopes=None, yscale='log', bg=None):
     nplots = 0
     actvs = []
     als = {}
@@ -85,12 +101,23 @@ def simple_activities(gd, plot=False, _xw=3, isotopes=None, yscale='log'):
                 _thr = [lfr,ufr,bl,lfr,ufr,bh]
                 if enrg in gd.eff_dict[ke]:
                     eff = gd.eff_dict[ke][enrg]
-                    a=compute_activity_per_line(gd=gd, thr=_thr, eff=eff ) # returns acitivity in Bq (not mBq!)
+                    capl=compute_activity_per_line(gd=gd, thr=_thr, eff=eff, bg=bg ) # returns acitivity in Bq (not mBq!)
+                      # returns np.array with: ([_a, _a_e, nsig, nbgl, nbgh, _cts, _cts_e])
+                    a = capl["signal"]
+                    acorr = capl["signal_corr"]
+                    b = capl["background"]
                     actvs.append(a)
                     if not ke in als:
-                        als[ke] = {"enrg_lab":[], "activity":[], "activity_unc":[]}
+                        als[ke] = {"enrg_lab":[], "activity":[], "activity_unc":[], "activity_bg_corrected":[], "activity_bg_corrected_unc":[],  "activity_unc_inclSysUnc":[], "actvs":{} }
+                    als[ke]["actvs"][enrg]=capl
                     als[ke]["activity"].append(a[0])
-                    als[ke]["activity_unc"].append(a[1])
+                    als[ke]["activity_unc"].append(a[1]) # this is the stats uncertainty due to the number of observed counts only
+                    #_nstat_mcstat_unc = (a[0]*np.sqrt( (a[1]/a[0])**2 + (eff[1]/eff[0])**2  )) # adding rel. error coming from finite MC stas (in quadrature)
+                    #als[ke]["activity_unc_inclStatUncSim"].append( _nstat_mcstat_unc  )
+                    _nstat_mcstat_mcsys = a[0]*np.sqrt( (a[1]/a[0])**2 + (0.1)**2 ) # adding 10% systematic error on MC efficiency
+                    als[ke]["activity_unc_inclSysUnc"].append( _nstat_mcstat_mcsys  )
+                    als[ke]["activity_bg_corrected"].append(acorr[0])
+                    als[ke]["activity_bg_corrected_unc"].append(acorr[1])
                     als[ke]["enrg_lab"].append(f"{enrg} keV")
                     #print (f"{ke}: {enrg} keV; eff=({eff[0]:.1e}+-{eff[1]:.1e});thr={_thr} -> ({a[0]*1e3:.1f}+-{a[1]*1e3:.1f}) mBq")
                     print (f"{ke}: {enrg} keV; eff=({eff[0]:.1e}+-{eff[1]:.1e}); (a2={a[2]}, a3={a[3]}, a4={a[4]}) -> ({a[0]*1e3:.1f}+-{a[1]*1e3:.1f}) mBq")
@@ -101,6 +128,9 @@ def simple_activities(gd, plot=False, _xw=3, isotopes=None, yscale='log'):
     for ke in als:
         als[ke]["activity"] = np.array( als[ke]["activity"] )
         als[ke]["activity_unc"] = np.array( als[ke]["activity_unc"] )
+        als[ke]["activity_unc_inclSysUnc"] = np.array( als[ke]["activity_unc_inclSysUnc"] )
+        als[ke]["activity_bg_corrected"] = np.array( als[ke]["activity_bg_corrected"] )
+        als[ke]["activity_bg_corrected_unc"] = np.array( als[ke]["activity_bg_corrected_unc"] )
         als[ke]["enrg_lab"] = np.array( als[ke]["enrg_lab"] )
 
     actvs = np.array(actvs)
@@ -136,16 +166,20 @@ def simple_activities(gd, plot=False, _xw=3, isotopes=None, yscale='log'):
                         ax.axvline(x=th, ls='--', color='k', lw=1)
                     ax.axvline(x=enrg, ls='-', color='r', lw=1)
 
-                    ax.hlines(y=actvs[na][3]/np.count_nonzero( (gd.x>_thr[2])&(gd.x<_thr[3]) ), xmin=_thr[2], xmax=_thr[3], ls='-', color='r', lw=1)
-                    ax.hlines(y=actvs[na][4]//np.count_nonzero( (gd.x>_thr[4])&(gd.x<_thr[5]) ), xmin=_thr[4], xmax=_thr[5], ls='-', color='r', lw=1)                    
+                    ax.hlines(y=actvs[na][3]/np.count_nonzero( (gd.x>_thr[2])&(gd.x<_thr[3]) ), xmin=_thr[2], xmax=_thr[3], ls='-', color='r', lw=1, zorder=25)
+                    ax.hlines(y=actvs[na][4]//np.count_nonzero( (gd.x>_thr[4])&(gd.x<_thr[5]) ), xmin=_thr[4], xmax=_thr[5], ls='-', color='r', lw=1, zorder=26)                    
 
                     if actvs[na][0]*1e3 > 0.1:
                         _lab = f"{ke}, {enrg} keV, eff_BR=({eff[0]*100:.2f}+-{eff[1]*100:.2f})%\n({actvs[na][0]*1e3:.1f}+-{actvs[na][1]*1e3:.1f}) mBq"
                     else:
                         _lab = f"{ke}, {enrg} keV, eff_BR=({eff[0]*100:.2f}+-{eff[1]*100:.2f})%\n({actvs[na][0]*1e3:.1e}+-{actvs[na][1]*1e3:.1e})mBq"
                     _xr = ((gd.x>(_thr[2]-_xw*de))&(gd.x<(_thr[5]+_xw*de)))
+                    _xr_bg = ((bg.x>(_thr[2]-_xw*de))&(bg.x<(_thr[5]+_xw*de)))
                     
                     ax.plot(gd.x[_xr] , gd.y[_xr] , '-o', c='b', lw=1, label=_lab)
+                    if bg:
+                      ax.plot(bg.x[_xr_bg] , bg.y[_xr_bg] , '-o', c='g', lw=1, label="background")
+
 
                     if True:
                         #xrange = (gd.x>_thr[0])&(gd.x<_thr[1]) # draw special lines onlz in ROI window 
@@ -167,27 +201,78 @@ def simple_activities(gd, plot=False, _xw=3, isotopes=None, yscale='log'):
     return actvs, als # ,np.array(als)
 
 
-def plot_actvs(als):
+def plot_actvs(als, exclude=None, ignore_outliers=True):
     ## This function is used to plot the results of multiple gamma lines that belong to a single isotope in the same figure
     ## Input is the result of the simple_activities function 
     nisos = len(als.keys())
     fig, axs = plt.subplots(nisos,1,figsize=(12,nisos*6))
     plt.style.use('/home/sebastian/.pltstyle/gemse.mplstyle')
+
     for i, ke in enumerate( als.keys() ):
         if nisos > 1:
             ax = axs[i]
         else:
             ax = axs
-        XnegA = (als[ke]['activity'] > 0)
 
-        ax.errorbar(x=als[ke]['enrg_lab'][XnegA], y=als[ke]['activity'][XnegA], yerr=als[ke]['activity_unc'][XnegA], fmt='o', label=f"{ke}")
+        _xid = np.array( len(als[ke]['activity'])*[ True ] )
+
+        if not exclude is None and ke in exclude.keys():
+          for dx in exclude[ke]:
+              if dx < len(_xid):
+                  _xid[dx] = False
+
+        try:
+          XnegA = (als[ke]['activity'] > 0) & _xid
+        except Exception as e:
+          print (f"...Error constructing cut XnegA. {e=}")
+          pass
+
+
+        if ignore_outliers:
+          # Plot all data to set proper x-range (but suppress visibility)
+          ax.plot(als[ke]['enrg_lab'][XnegA], als[ke]['activity'][XnegA], visible=False, zorder=1)
+        else:
+          ax.plot(als[ke]['enrg_lab'], als[ke]['activity'], visible=False, zorder=1)
 
         try:
             #weight = 1/(uncertainty)^2
-            avg = np.average(als[ke]['activity'][XnegA], weights=1/(als[ke]['activity_unc'][XnegA])**2)
-            ax.axhline(y=avg, ls='--', color='r', lw=1, label=f"avg (weighted): {avg*1000:.1f} mBq")
-        except:
-            pass
+            _weights = 1 / (als[ke]['activity_unc'][XnegA])**2
+            avg = np.average(als[ke]['activity'][XnegA], weights=_weights)
+            avg_unc = np.sqrt( 1 / np.sum(_weights) )
+            avg_unc_inclSys = avg * np.sqrt((avg_unc/avg)**2 +(0.1)**2)
+            uavg = ufloat(avg, avg_unc)
+            uavg_inclSys = ufloat(avg, avg_unc_inclSys)
+            #label = f"avg (weighted): ({avg*1000:.1f}+-{avg_unc*1000:.1f}) mBq"
+            ulabel = f"avg (weighted): ({uavg} / {uavg_inclSys}) mBq"
+            ax.axhline(y=avg, ls='--', color='blue', lw=1, label=ulabel)
+
+            # Get the x and y limits of the axis
+            x_min, x_max = ax.get_xlim()
+            y_min = avg-avg_unc
+            y_max = avg+avg_unc
+            y_minSys = avg-avg_unc_inclSys
+            y_maxSys = avg+avg_unc_inclSys
+            #print (f"{x_min=} {x_max=} {y_min=} {y_max=}")
+
+            rect = patches.Rectangle((x_min, y_min), x_max - x_min, y_max - y_min, 
+                                     color='lightblue', alpha=0.5, zorder=2)
+
+            rectSys = patches.Rectangle((x_min, y_minSys), x_max - x_min, y_maxSys - y_minSys, 
+                                     color='lightgreen', alpha=0.4, zorder=1)
+            ax.add_patch(rect)
+            ax.add_patch(rectSys)
+        except Exception as e:
+          print (f"ERROR {e=}")
+          pass
+
+        #higher zorder are drawn on top
+        ax.errorbar(x=als[ke]['enrg_lab'][XnegA], y=als[ke]['activity'][XnegA], yerr=als[ke]['activity_unc'][XnegA], color='k', fmt='o', label=f"{ke}", zorder=12)
+        ax.errorbar(x=als[ke]['enrg_lab'][XnegA], y=als[ke]['activity'][XnegA], yerr=als[ke]['activity_unc_inclSysUnc'][XnegA], color='g', fmt='o', label="includig stat. and 10% sys. unc. of MC", zorder=9)
+        ax.errorbar(x=als[ke]['enrg_lab'][XnegA], y=als[ke]['activity_bg_corrected'][XnegA], yerr=als[ke]['activity_bg_corrected_unc'][XnegA], color='m', fmt='o', label="bg corrected", zorder=15)
+        if not exclude is None and not ignore_outliers:
+          ax.errorbar(x=als[ke]['enrg_lab'][~XnegA], y=als[ke]['activity'][~XnegA], yerr=als[ke]['activity_unc'][~XnegA], color='k', alpha=0.4, fmt='o', zorder=11)
+
+        #eff = gd.eff_dict[ke][enrg]
         
         ax.legend() 
         ax.set_ylabel("Activity [Bq]")
@@ -200,5 +285,36 @@ def which_chain(gd, isotope):
         if isotope in gd.decay_chains[k] or convert_isotope_name(isotope=isotope) in gd.decay_chains[k]:
             _chains.append(k)
     print (_chains)
+
+
+def print_activities_summary(als, exclude=None, ignore_outliers=True):
+    for i, ke in enumerate( als.keys() ):
+        _xid = np.array( len(als[ke]['activity'])*[ True ] ) 
+        if not exclude is None and ke in exclude.keys():
+          for dx in exclude[ke]:
+              if dx < len(_xid):
+                  _xid[dx] = False
+        try:
+          XnegA = (als[ke]['activity'] > 0) & _xid
+        except Exception as e:
+          print (f"...Error constructing cut XnegA. {e=}")
+          pass
+
+        try:
+          is_bg_corrected=False
+          if not als[ke]['activity_bg_corrected'].any() is None:
+            _weights = 1 / (als[ke]['activity_bg_corrected_unc'][XnegA])**2
+            avg = np.average(als[ke]['activity_bg_corrected'][XnegA], weights=_weights)
+            is_bg_corrected=True
+          else:
+            _weights = 1 / (als[ke]['activity_unc'][XnegA])**2
+            avg = np.average(als[ke]['activity'][XnegA], weights=_weights)
+          avg_unc = np.sqrt( 1 / np.sum(_weights) )
+          avg_unc_inclSys = avg * np.sqrt((avg_unc/avg)**2 +(0.1)**2)
+          uavg = ufloat(avg, avg_unc)
+          uavg_inclSys = ufloat(avg, avg_unc_inclSys)
+          print (f"{ke:>10}:  {uavg:S} Bq \t-> {uavg_inclSys:S} Bq; \t{is_bg_corrected=}")
+        except Exception as e:
+            print (f"{ke:>10}: {e}")
 
 
