@@ -1122,7 +1122,7 @@ class GeMSEData_bat():
             print("ERROR: _root_scripts_path not set! Use: sample._root_scripts_path = $ROOT_SCRIPTS_PATH")
             return
         if self._path_to_container_image is None:
-            print("ERROR: _path_to_container_image not set! Use: sample._path_to_container_image = $SINGULARITYCONTAINER_IMAGE")
+            print("ERROR: _path_to_container_image not set! Use: sample._path_to_container_image = $SINGULARITY_CONTAINER_IMAGE")
             return
         _apppath = os.path.join(self._root_scripts_path, "get_calibration_function")
         import subprocess
