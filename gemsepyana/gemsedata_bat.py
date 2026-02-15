@@ -55,6 +55,7 @@ class GeMSEData_bat():
         # Configurable paths (set from config before calling load_bat_params)
         self._path_to_container_image = None  # e.g. config["CONTAINER_IMAGE"]
         self._root_scripts_path = None        # e.g. config["ROOT_SCRIPTS_PATH"]
+#        self._path_to_compiled_app = None # e.g. onfig["ROOT_SCRIPTS_BINS"], "get_calibration_function")
 
     def load_bat_params(self, fn):
         ### fn is typically the "parameters_activity_calculation.txt" file used by "GeMSE_analysis"
@@ -379,10 +380,30 @@ class GeMSEData_bat():
         # Reading efficencies from ROOT files via C++ file "get_times_from_rootfile.cxx" and saving it in a txt
         import subprocess
         _tmpfile = "efficiencies.txt"
-        _path_to_compiled_app = "/home/sebastian/Computing/GeMSE/GeMSE_root_scripts/GeMSE_ROOT_scripts/get_efficiencies_from_rootfile"
+
+        if self._root_scripts_path is None:
+            print("ERROR: _root_scripts_path not set!")
+            print("  Use: sample._root_scripts_path = config['ROOT_SCRIPTS_PATH']")
+            return None
+        if self._path_to_container_image is None:
+            print("ERROR: _path_to_container_image not set!")
+            print("  Use: sample._path_to_container_image = config['CONTAINER_IMAGE']")
+            return None
+
+        # Path check
+        _get_efficiencies_from_rootfile = os.path.join(self._root_scripts_path, "get_efficiencies_from_rootfile")
+
+        if not os.path.exists(_get_efficiencies_from_rootfile):
+            print("ERROR: _get_efficiencies_from_rootfile does not exist or has to be compiled!")
+            print("  Use: sample._path_to_compiled_app = $ROOT_SCRIPTS_BINS")
+            return
+        
+        #_path_to_compiled_app = "/home/sebastian/Computing/GeMSE/GeMSE_root_scripts/GeMSE_ROOT_scripts/get_efficiencies_from_rootfile"
+
+        # Reading efficiencies from ROOT files via C++ executable
         with open(_tmpfile, "w") as f:
             #p1 = subprocess.run([_path_to_compiled_app, self.eff_rootfile], stdout=f, text=True)
-            p1 = subprocess.run(["singularity","exec",self._path_to_container_image,_path_to_compiled_app, self.eff_rootfile], stdout=f, text=True)
+            p1 = subprocess.run(["singularity","exec",self._path_to_container_image,_get_efficiencies_from_rootfile, self.eff_rootfile], stdout=f, text=True)
         print ("Efficiencies loaded.")
         eff_dict = {}
         eff_dict_err = {}
