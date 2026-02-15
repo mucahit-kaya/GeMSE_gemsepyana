@@ -137,7 +137,7 @@ def simple_activities(gd, plot=False, _xw=3, isotopes=None, yscale='log', bg=Non
     actvs = np.array(actvs)
                 
     if plot:
-        plt.style.use('/home/sebastian/.pltstyle/gemse_small.mplstyle')
+        plt.style.use( os.path.join( os.path.dirname(__file__), 'gemse.mplstyle') )
         fig, axs = plt.subplots(nplots,1,figsize=(16,nplots*8))
         na = -1
         for ke in gd.eff_dict:
