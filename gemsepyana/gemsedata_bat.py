@@ -51,7 +51,10 @@ class GeMSEData_bat():
         self.resolution_function = None
         self.bat_summary = None
         self.x_orig, self.y_orig, self.bw_orig, self.ynorm_orig = None, None, None, None
-        self._path_to_container_image = "/home/sebastian/Computing/GeMSE/singularity_containers/gemse_env_sl_wand.simg"
+        #self._path_to_container_image = "/home/sebastian/Computing/GeMSE/singularity_containers/gemse_env_sl_wand.simg"
+        # Configurable paths (set from config before calling load_bat_params)
+        self._path_to_container_image = None  # e.g. config["CONTAINER_IMAGE"]
+        self._root_scripts_path = None        # e.g. config["ROOT_SCRIPTS_PATH"]
 
     def load_bat_params(self, fn):
         ### fn is typically the "parameters_activity_calculation.txt" file used by "GeMSE_analysis"
@@ -1093,11 +1096,18 @@ class GeMSEData_bat():
         ## execute get_calibration_function
         _tmpfn = "tmp.txt"
         exf1, exf2 = None, None
-        _apppath = "/home/sebastian/Computing/GeMSE/GeMSE_root_scripts/GeMSE_ROOT_scripts/get_calibration_function"
+        # Path check
+        if self._root_scripts_path is None:
+            print("ERROR: _root_scripts_path not set! Use: sample._root_scripts_path = $ROOT_SCRIPTS_PATH")
+            return
+        if self._path_to_container_image is None:
+            print("ERROR: _path_to_container_image not set! Use: sample._path_to_container_image = $SINGULARITYCONTAINER_IMAGE")
+            return
+        _apppath = os.path.join(self._root_scripts_path, "get_calibration_function")
         import subprocess
         with open(_tmpfn, "w") as f:
             #p1 = subprocess.run([_apppath, path_to_tf1_rootfile], stdout=f, text=True)
-            p1 = subprocess.run(["singularity","exec",self._path_to_container_image,_apppath, path_to_tf1_rootfile], stdout=f, text=True)
+            p1 = subprocess.run(["singularity", "exec", self._path_to_container_image, _apppath, path_to_tf1_rootfile], stdout=f, text=True)
         with open(_tmpfn, "r") as f:
             for line in f:
               w = line.split(":")
@@ -1106,7 +1116,7 @@ class GeMSEData_bat():
               elif w[0]=="#formulaP":
                 exf2=w[1].strip()
               else:
-                print("Odd format. I read this: '{line}'")
+                print(f"Odd format. I read this: '{line}'")
         os.remove(_tmpfn)
 
         if exf1 == "sqrt(([p0]+([p1]*x))+([p2]*(x*x)))":
